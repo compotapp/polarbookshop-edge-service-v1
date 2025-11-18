@@ -10,7 +10,19 @@ spring:
     name: edge-service
   lifecycle:
     timeout-per-shutdown-phase: 15s
+  config:
+    import: "optional:configserver:"
   cloud:
+    config:
+      uri: http://localhost:8888
+      request-connect-timeout: 5000 # 5s
+      request-read-timeout: 5000 # 5s
+      fail-fast: false # In production, set to true
+      retry:
+        max-attempts: 6
+        initial-interval: 1000 # 1s
+        max-interval: 2000 # 2s
+        multiplier: 1.1
     gateway:
       server:
         webflux:
@@ -43,7 +55,7 @@ spring:
               max-life-time: 60s
           routes:
             - id: catalog-route
-              uri: ${CATALOG_SERVICE_URL:http://localhost:9001}/books
+              uri: ${CATALOG_SERVICE_URL:http://localhost:9001}
               predicates:
                 - Path=/books/**
               filters:
@@ -52,17 +64,22 @@ spring:
                     name: catalogCircuitBreaker
                     fallbackUri: forward:/catalog-fallback
             - id: order-route
-              uri: ${ORDER_SERVICE_URL:http://localhost:9002}/orders
+              uri: ${ORDER_SERVICE_URL:http://localhost:9002}
               predicates:
                 - Path=/orders/**
               filters:
                 - name: CircuitBreaker
                   args:
                     name: orderCircuitBreaker
+            - id: spa-route
+              uri: ${SPA_URL:http://localhost:9004}
+              predicates:
+                - Path=/,/*.css,/*.js,/favicon.ico
+
   data:
     redis:
       connect-timeout: 2s
-      host: localhost
+      host: ${REDIS_HOST:localhost}
       port: 6379
       timeout: 1s
   session:
@@ -82,3 +99,58 @@ resilience4j:
     configs:
       default:
         timeoutDuration: 5s
+#logging:
+#  level:
+#    org.springframework.security: TRACE
+#    org.springframework.cloud.gateway: TRACE
+#    org.springframework.web: TRACE
+#    reactor.netty: TRACE
+#    org.springframework.web.server: TRACE
+#    org.springframework.security.oauth2: TRACE
+#    org.springframework.cloud.gateway.route.RouteDefinitionRouteLocator: TRACE
+#    org.springframework.cloud.gateway.handler.FilteringWebHandler: TRACE
+#    org.springframework.cloud.gateway.filter: TRACE
+#    io.github.resilience4j: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        #По умолчанию конечная точка не отображается, поэтому вам необходимо явно включить.
+        #Предоставляет конечные точки как работоспособности, так и показателей.
+        #Предоставляет конечную точку /actuator/refresh через HTTP.
+        #Предоставляет конечную точку /actuator/health через HTTP.
+        #Предоставляет конечную точку /actuator/metrics через HTTP.
+        #Предоставляет конечную точку /actuator/prometheus через HTTP.
+        include: refresh, health, metrics, prometheus
+  endpoint:
+    #http :9000/actuator/health
+    health:
+      #Всегда показывает подробную информацию о состоянии приложения
+      show-details: always
+      #Всегда показывает информацию о компонентах, используемых приложением
+      show-components: always
+      probes:
+        #http :9000/actuator/health/readiness Когда он не готов, Kubernetes не будет отправлять трафик на экземпляр приложения.
+        #http :9000/actuator/health/liveness
+        #Включает поддержку зондов работоспособности
+        enabled: true
+      group:
+        readiness:
+          #Проверка готовности будет объединять состояние готовности приложения и доступность Redis
+          include: readinessState, redis
+  metrics:
+    tags:
+      #Добавляет общий тег Micrometer с именем приложения. В результате ко всем метрикам применяется метка Prometheus.
+      application: ${spring.application.name}
+
+logging:
+  group:
+    #Собирает несколько регистраторов в группу для применения одной и той же конфигурации.
+    circuitbreaker: io.github.resilience4j, org.springframework.cloud.circuitbreaker
+  level:
+    #Устанавливает регистратор «информации» для Resilience4J и Spring Cloud Circuit Breaker, который легко изменить, если вам нужно отладить автоматические выключатели
+    circuitbreaker: info
+  pattern:
+    #Включает имя приложения, идентификатор трассировки и идентификатор диапазона рядом с уровнем журнала (%5p).
+    level: "%5p [${spring.application.name},%X{trace_id},%X{span_id}]"
