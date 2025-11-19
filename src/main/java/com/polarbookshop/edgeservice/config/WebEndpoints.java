@@ -1,4 +1,4 @@
-package com.polarbookshop.edgeservice.web;
+package com.polarbookshop.edgeservice.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

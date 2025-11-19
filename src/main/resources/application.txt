@@ -5,18 +5,44 @@ server:
     idle-timeout: 15s
   shutdown: graceful
 
+logging:
+  level:
+    org.springframework.security: TRACE
+    org.springframework.cloud.gateway: TRACE
+    org.springframework.web: TRACE
+    reactor.netty: TRACE
+    org.springframework.web.server: TRACE
+    org.springframework.security.oauth2: TRACE
+    org.springframework.cloud.gateway.route.RouteDefinitionRouteLocator: TRACE
+    org.springframework.cloud.gateway.handler.FilteringWebHandler: TRACE
+    org.springframework.cloud.gateway.filter: TRACE
+
 spring:
   application:
     name: edge-service
   lifecycle:
     timeout-per-shutdown-phase: 15s
+  config:
+    import: "optional:configserver:"
   cloud:
+    config:
+      uri: http://localhost:8888
+      request-connect-timeout: 5000 # 5s
+      request-read-timeout: 5000 # 5s
+      fail-fast: false # In production, set to true
+      retry:
+        max-attempts: 6
+        initial-interval: 1000 # 1s
+        max-interval: 2000 # 2s
+        multiplier: 1.1
     gateway:
       server:
         webflux:
           default-filters:
             #Обеспечивает сохранение данных сеанса перед пересылкой запроса вниз по течению.
             - SaveSession
+            #Включает распространение токена доступа при вызове нижестоящей службы.
+            - TokenRelay
             - name: RequestRateLimiter
               args:
                 redis-rate-limiter:
@@ -43,22 +69,27 @@ spring:
               max-life-time: 60s
           routes:
             - id: catalog-route
-              uri: ${CATALOG_SERVICE_URL:http://localhost:9001}/books
+              uri: ${CATALOG_SERVICE_URL:http://localhost:9001}
               predicates:
                 - Path=/books/**
-              filters:
-                - name: CircuitBreaker
-                  args:
-                    name: catalogCircuitBreaker
-                    fallbackUri: forward:/catalog-fallback
+#              filters:
+#                - name: CircuitBreaker
+#                  args:
+#                    name: catalogCircuitBreaker
+#                    fallbackUri: forward:/catalog-fallback
             - id: order-route
-              uri: ${ORDER_SERVICE_URL:http://localhost:9002}/orders
+              uri: ${ORDER_SERVICE_URL:http://localhost:9002}
               predicates:
                 - Path=/orders/**
               filters:
                 - name: CircuitBreaker
                   args:
                     name: orderCircuitBreaker
+            - id: spa-route
+              uri: ${SPA_URL:http://localhost:9004}
+              predicates:
+                - Path=/,/*.css,/*.js,/favicon.ico
+
   data:
     redis:
       connect-timeout: 2s
@@ -69,6 +100,26 @@ spring:
     timeout: 10s
     redis:
       namespace: pbs:edge
+  security:
+    oauth2:
+      client:
+        registration:
+          #Имя, идентифицирующее регистрацию Клиента в Spring Security (называемое «registrationId»). Это может быть любая строка.
+          #Идентификатор регистрации используется для создания URL-адреса, по которому Spring Security получает код авторизации от Keycloak.
+          #Шаблон URL-адреса по умолчанию — login/oauth2/code/{registrationId}
+          #Для Edge Service полный URL-адрес — http://localhost:9000/login/oauth2/code/keycloak
+          keycloak:
+            #Идентификатор клиента OAuth2, определенный в Keycloak.
+            client-id: pbs-edge-service
+            #Общий секрет, используемый Клиентом для аутентификации с помощью Keycloak.
+            client-secret: pbs-keycloak-secret
+            #Список областей, к которым Клиент хотел бы иметь доступ. Область openid запускает аутентификацию OIDC поверх OAuth2
+            scope: openid, roles
+        provider:
+          #То же имя, что и «registrationId» несколькими строками выше.
+          keycloak:
+            #URL-адрес Keycloak, предоставляющий информацию обо всех соответствующих конечных точках OAuth2 и OIDC для конкретной области.
+            issuer-uri: http://localhost:8080/realms/PBS
 
 resilience4j:
   circuitbreaker:

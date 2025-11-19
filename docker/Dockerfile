@@ -55,13 +55,5 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 
 #docker build -f docker/Dockerfile -t pbs-edge-service:1.0.0 .
 #docker build -f docker/Dockerfile -t goppot/pbs-edge-service:1.0.0 .
-#docker run -d --name edge-service -p 9001:9001 pbs-edge-service:1.0.0
-#docker run -d --name edge-service --net edge-network -p 9001:9001 -e SPRING_DATASOURCE_URL=jdbc:postgresql://polar-postgres:5432/polardb_catalog -e SPRING_PROFILES_ACTIVE=testdata -e SPRING_CLOUD_CONFIG_URI=http://config-service:8888 pbs-catalog-service:1.0.0
-#docker tag pbs-edge-service-image:1.0.0 ghcr.io/compotapp/pbs-edge-service:1.0.0
-#docker login ghcr.io
-#username ...
-#password token
-#docker push ghcr.io/compotapp/pbs-edge-service:1.0.0
-
-#docker tag pbs-edge-service:1.0.0 goppot/pbs-config-catalog:1.0.0
+#docker tag pbs-edge-service:1.0.0 goppot/pbs-edge-service:1.0.0
 #docker push goppot/pbs-edge-service:1.0.0
